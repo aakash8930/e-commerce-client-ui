@@ -1,31 +1,25 @@
-// components/SimpleSlider.tsx
-
 "use client";
 
 import { useState, useEffect } from "react";
 import Image from "next/image";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
-// 1. Add your slide images here
 const slides = [
     { src: "/featured.png", alt: "Featured Product 1" },
-    { src: "/NewArrival.png", alt: "NewArrival" }, // Example: Add another image
-    { src: "/Sale.png", alt: "Sale" }, // Example: Add a third image
+    { src: "/NewArrival.png", alt: "NewArrival" },
+    { src: "/Sale.png", alt: "Sale" },
 ];
 
 const ImageSlider = () => {
     const [currentIndex, setCurrentIndex] = useState(0);
 
-    // --- Autoplay Functionality ---
+    // Autoplay: advance to the next slide every 4 seconds
     useEffect(() => {
-        // Set a timer to advance the slide
         const timer = setTimeout(() => {
-            handleNext();
-        }, 4000); // Changes slide every 4 seconds
-
-        // Clear the timer if the component unmounts or the index changes
+            setCurrentIndex((prev) => (prev === slides.length - 1 ? 0 : prev + 1));
+        }, 4000);
         return () => clearTimeout(timer);
-    }, [currentIndex]); // Re-run this effect whenever currentIndex changes
+    }, [currentIndex]);
 
     const handlePrev = () => {
         const isFirstSlide = currentIndex === 0;
@@ -40,8 +34,7 @@ const ImageSlider = () => {
     };
 
     return (
-        // Container with the same classes as your original <div>
-        <div className="relative aspect-[3/1] md-12 overflow-hidden">
+        <div className="relative aspect-[3/1] overflow-hidden">
             {/* Slides */}
             {slides.map((slide, index) => (
                 <div
@@ -53,12 +46,12 @@ const ImageSlider = () => {
                         src={slide.src}
                         alt={slide.alt}
                         fill
-                        className="object-cover" // Ensures the image fills the container
+                        className="object-cover"
                     />
                 </div>
             ))}
 
-            {/* --- Navigation Arrows --- */}
+            {/* Navigation Arrows */}
             <button
                 onClick={handlePrev}
                 className="absolute top-1/2 left-4 -translate-y-1/2 bg-black/30 text-white p-2 rounded-full z-10 hover:bg-black/50 transition-colors"
@@ -72,7 +65,7 @@ const ImageSlider = () => {
                 <ChevronRight size={24} />
             </button>
 
-            {/* --- Pagination Dots --- */}
+            {/* Pagination Dots */}
             <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2 z-10">
                 {slides.map((_, index) => (
                     <div

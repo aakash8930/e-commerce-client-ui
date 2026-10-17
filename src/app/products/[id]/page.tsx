@@ -1,8 +1,9 @@
 import ProductInteraction from "@/components/ProductInteraction";
 import { ProductType } from "@/types";
+import type { Metadata } from "next";
 import Image from "next/image";
 
-// TEMPORARY
+// TEMPORARY mock data — replace with the product fetched from the database
 const product: ProductType = {
   id: 1,
   name: "Adidas CoreFit T-Shirt",
@@ -20,23 +21,15 @@ const product: ProductType = {
   },
 };
 
-
-
-export const generateMetadata = async ({
-  params,
-}: {
-  params: { id: string };
-}) => {
-  // TODO:get the product from db
-  // TEMPORARY
+export const generateMetadata = async (): Promise<Metadata> => {
+  // TODO: fetch the product from the db using the id from params
   return {
     title: product.name,
-    describe: product.description,
+    description: product.description,
   };
 };
 
 const ProductPage = async ({
-  params,
   searchParams,
 }: {
   params: Promise<{ id: string }>;
@@ -44,8 +37,8 @@ const ProductPage = async ({
 }) => {
   const { size, color } = await searchParams;
 
-  const selectedSize = size || (product.sizes[0] as string);
-  const selectedColor = color || (product.colors[0] as string);
+  const selectedSize = size || product.sizes[0];
+  const selectedColor = color || product.colors[0];
   return (
     <div className="flex flex-col gap-4 lg:flex-row md:gap-12 mt-12">
       {/* IMAGE */}

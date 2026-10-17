@@ -1,5 +1,3 @@
-// cartStore.tsx
-
 import { CartStoreActionsType, CartStoreStateType } from "@/types";
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
@@ -48,14 +46,13 @@ const useCartStore = create<CartStoreStateType & CartStoreActionsType>()(
           ),
         })),
 
-      // --- NEW FUNCTIONS ADDED ---
       increaseQuantity: (product) =>
         set((state) => ({
           cart: state.cart.map((p) =>
             p.id === product.id &&
             p.selectedSize === product.selectedSize &&
             p.selectedColor === product.selectedColor
-              ? { ...p, quantity: p.quantity + 1 } // Increase quantity by 1
+              ? { ...p, quantity: p.quantity + 1 }
               : p
           ),
         })),
@@ -69,7 +66,7 @@ const useCartStore = create<CartStoreStateType & CartStoreActionsType>()(
               p.selectedColor === product.selectedColor
           );
 
-          // If quantity is 1, filter it out (remove it)
+          // If quantity is 1, remove the item from the cart
           if (productInCart?.quantity === 1) {
             return {
               cart: state.cart.filter(
@@ -83,7 +80,6 @@ const useCartStore = create<CartStoreStateType & CartStoreActionsType>()(
             };
           }
 
-          // Otherwise, just decrease quantity by 1
           return {
             cart: state.cart.map((p) =>
               p.id === product.id &&
@@ -94,7 +90,6 @@ const useCartStore = create<CartStoreStateType & CartStoreActionsType>()(
             ),
           };
         }),
-      // --- END OF NEW FUNCTIONS ---
 
       clearCart: () => set({ cart: [] }),
     }),

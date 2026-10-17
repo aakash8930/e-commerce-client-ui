@@ -1,8 +1,8 @@
 import { ProductsType } from "@/types";
 import Categories from "./Categories";
+import Filter from "./Filter";
 import ProductCard from "./ProductCard";
 import Link from "next/link";
-import { Filter } from "lucide-react";
 
 // Temporary Product List
 const products: ProductsType = [
