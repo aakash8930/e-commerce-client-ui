@@ -155,6 +155,12 @@ def cmd_run(app: JarvisApp, args: argparse.Namespace) -> int:
         return _run_verification(app, context, args)
     if intent.name == "maintenance_report":
         return _run_maintenance(app, context, args)
+    if intent.name == "organize_files":
+        return _run_organize(app, context, args)
+    if intent.name == "desktop_launch":
+        return _run_desktop(app, args, "desktop.launch_app", {"name": intent.params.get("app", "")})
+    if intent.name == "desktop_open_url":
+        return _run_desktop(app, args, "desktop.open_url", {"url": intent.params.get("url", "")})
 
     task = app.requests.create(request)
     plan = app.planner.build_plan(task, intent, context)
@@ -208,6 +214,63 @@ def _run_maintenance(app: JarvisApp, context: dict, args: argparse.Namespace) ->
     return 0
 
 
+def _run_organize(app: JarvisApp, context: dict, args: argparse.Namespace) -> int:
+    from automation.file_organization import organize_files
+
+    target = context.get("project_path", ".")
+    auto = bool(args.yes)
+
+    def approve(plan: list[dict]) -> bool:
+        _print(f"\nproposed organization ({len(plan)} files):")
+        for item in plan[:20]:
+            _print(f"  {item['name']:<40} → {item['dest']}")
+        if len(plan) > 20:
+            _print(f"  … and {len(plan) - 20} more")
+        if auto:
+            return True
+        try:
+            answer = input("\nApply these moves? [y/N] ").strip().lower()
+        except EOFError:
+            return False
+        return answer in {"y", "yes"}
+
+    report = organize_files(
+        app.orchestrator,
+        target_dir=target,
+        reports_dir=app.config["paths"]["reports_dir"],
+        approve=approve,
+    )
+    _print(f"\n{report['note']}")
+    _print(f"report: {report['report_path']}")
+    return 0
+
+
+def _run_desktop(app: JarvisApp, args: argparse.Namespace, tool: str, arguments: dict) -> int:
+    result, refusal = app.orchestrator.run_action(
+        Action(tool=tool, arguments=arguments, reason="user request")
+    )
+    if not result.ok:
+        _print(f"refused: {result.error or refusal}")
+        return 1
+    _print(json.dumps(result.data, indent=2))
+    return 0
+
+
+def cmd_apps(app: JarvisApp, _args: argparse.Namespace) -> int:
+    result, _ = app.orchestrator.run_action(Action(tool="desktop.list_apps", arguments={}))
+    if not result.ok:
+        _print(f"cannot list applications: {result.error}")
+        return 1
+    data = result.data
+    _print(f"desktop session available: {data['desktop_available']}")
+    _print(f"approved for launch: {', '.join(data['approved_apps']) or '(none)'}")
+    _print(f"installed applications ({len(data['installed'])} found):")
+    for a in data["installed"][:25]:
+        mark = "✔" if a["id"].lower() in data["approved_apps"] else " "
+        _print(f"  [{mark}] {a['name']:<32} ({a['id']})")
+    return 0
+
+
 def cmd_demo(app: JarvisApp, args: argparse.Namespace) -> int:
     from automation.project_diagnosis import diagnose
 
@@ -237,6 +300,7 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("status")
     sub.add_parser("projects")
     sub.add_parser("tools")
+    sub.add_parser("apps")
 
     p = sub.add_parser("index")
     p.add_argument("path")
@@ -265,6 +329,7 @@ COMMANDS = {
     "tasks": cmd_tasks,
     "memory": cmd_memory,
     "tools": cmd_tools,
+    "apps": cmd_apps,
     "run": cmd_run,
     "demo": cmd_demo,
 }

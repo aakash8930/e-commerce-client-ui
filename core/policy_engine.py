@@ -57,6 +57,8 @@ class PolicyEngine:
         blocked_dirs: list[str],
         command_specs: dict[str, dict[str, Any]] | None = None,
         project_root: str | None = None,
+        approved_apps: list[str] | None = None,
+        allowed_url_schemes: list[str] | None = None,
     ) -> None:
         self._root = Path(project_root or os.getcwd()).resolve()
         self.approved_roots = [self._resolve_root(p) for p in approved_roots]
@@ -64,6 +66,8 @@ class PolicyEngine:
         self.blocked_names = list(blocked_names)
         self.blocked_dirs = list(blocked_dirs)
         self.command_specs = command_specs or {}
+        self.approved_apps = [a.lower() for a in (approved_apps or [])]
+        self.allowed_url_schemes = [s.lower() for s in (allowed_url_schemes or ["https", "http"])]
         self._known_tool_risk: dict[str, RiskLevel] = {}
 
     def set_known_tools(self, tools: list[dict[str, Any]]) -> None:
@@ -86,6 +90,7 @@ class PolicyEngine:
     def from_config(cls, config: dict[str, Any], project_root: str | None = None) -> "PolicyEngine":
         fs = config.get("filesystem", {})
         secrets = config.get("secrets", {})
+        desktop = config.get("desktop", {})
         return cls(
             approved_roots=list(fs.get("approved_roots", ["."])),
             write_roots=list(fs.get("write_roots", [])),
@@ -93,6 +98,8 @@ class PolicyEngine:
             blocked_dirs=list(secrets.get("blocked_dirs", [])),
             command_specs=config.get("commands", {}),
             project_root=project_root,
+            approved_apps=list(desktop.get("approved_apps", [])),
+            allowed_url_schemes=list(desktop.get("allowed_url_schemes", ["https", "http"])),
         )
 
     # ------------------------------------------------------------------ paths
@@ -176,18 +183,70 @@ class PolicyEngine:
             tool = action.tool
 
             if tool.startswith("filesystem."):
-                write = tool in {"filesystem.write_text", "filesystem.delete"}
-                path = action.arguments.get("path")
-                if not path:
-                    return PolicyDecision(False, False, RiskLevel.LOW, "missing 'path' argument")
-                self.check_path(path, write=write)
+                write = tool in {"filesystem.write_text", "filesystem.delete", "filesystem.move"}
+                if tool == "filesystem.move":
+                    source = action.arguments.get("source")
+                    dest = action.arguments.get("dest")
+                    if not source or not dest:
+                        return PolicyDecision(
+                            False, False, RiskLevel.HIGH,
+                            "filesystem.move requires 'source' and 'dest'",
+                        )
+                    self.check_path(source, write=True)
+                    self.check_path(dest, write=True)
+                    risk = RiskLevel.HIGH  # moving files needs explicit approval
+                else:
+                    path = action.arguments.get("path")
+                    if not path:
+                        return PolicyDecision(False, False, RiskLevel.LOW, "missing 'path' argument")
+                    self.check_path(path, write=write)
+                    risk = {
+                        "filesystem.read_text": RiskLevel.LOW,
+                        "filesystem.list_dir": RiskLevel.LOW,
+                        "filesystem.search": RiskLevel.LOW,
+                        "filesystem.catalog": RiskLevel.LOW,
+                        "filesystem.write_text": RiskLevel.MODERATE,
+                        "filesystem.delete": RiskLevel.HIGH,
+                    }.get(tool, RiskLevel.MODERATE)
+
+            elif tool.startswith("desktop."):
                 risk = {
-                    "filesystem.read_text": RiskLevel.LOW,
-                    "filesystem.list_dir": RiskLevel.LOW,
-                    "filesystem.search": RiskLevel.LOW,
-                    "filesystem.write_text": RiskLevel.MODERATE,
-                    "filesystem.delete": RiskLevel.HIGH,
-                }.get(tool, RiskLevel.MODERATE)
+                    "desktop.list_apps": RiskLevel.LOW,
+                    "desktop.is_running": RiskLevel.LOW,
+                    "desktop.processes": RiskLevel.LOW,
+                    "desktop.launch_app": RiskLevel.MODERATE,
+                    "desktop.open_file": RiskLevel.MODERATE,
+                    "desktop.open_url": RiskLevel.MODERATE,
+                }.get(tool, RiskLevel.HIGH)
+
+                if tool == "desktop.launch_app":
+                    name = str(action.arguments.get("name", "")).lower()
+                    if name.endswith(".desktop"):
+                        name = name[: -len(".desktop")]
+                    if name not in self.approved_apps:
+                        return PolicyDecision(
+                            False,
+                            False,
+                            RiskLevel.HIGH,
+                            f"application {action.arguments.get('name')!r} is not in the "
+                            "approved_apps allowlist — refused",
+                        )
+                if tool == "desktop.open_file":
+                    path = action.arguments.get("path")
+                    if not path:
+                        return PolicyDecision(False, False, RiskLevel.MODERATE, "missing 'path' argument")
+                    self.check_path(path, write=False)
+                if tool == "desktop.open_url":
+                    from urllib.parse import urlparse
+
+                    scheme = urlparse(str(action.arguments.get("url", ""))).scheme.lower()
+                    if scheme not in self.allowed_url_schemes:
+                        return PolicyDecision(
+                            False,
+                            False,
+                            RiskLevel.CRITICAL,
+                            f"URL scheme {scheme!r} is not permitted",
+                        )
 
             elif tool == "terminal.run":
                 name = action.arguments.get("command", "")

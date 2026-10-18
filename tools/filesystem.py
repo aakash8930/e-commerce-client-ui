@@ -97,6 +97,45 @@ def make_filesystem_tools(policy: PolicyEngine, max_read_bytes: int, max_hits: i
                         break
         return {"query": query, "hits": hits, "files_scanned": scanned}
 
+    def catalog(args: dict[str, Any]) -> dict[str, Any]:
+        """Top-level inventory: files with extension, size, mtime; dirs listed."""
+        target = _guard(policy, args["path"])
+        if not target.is_dir():
+            raise ToolError(f"not a directory: {target}")
+        files, dirs = [], []
+        for child in sorted(target.iterdir()):
+            try:
+                stat = child.stat()
+            except OSError:
+                continue
+            if child.is_dir():
+                dirs.append(child.name)
+            elif child.is_file():
+                files.append(
+                    {
+                        "name": child.name,
+                        "ext": child.suffix.lower(),
+                        "size": stat.st_size,
+                        "mtime": int(stat.st_mtime),
+                    }
+                )
+        return {"path": str(target), "files": files[:500], "dirs": dirs[:200]}
+
+    def move(args: dict[str, Any]) -> dict[str, Any]:
+        """Move a file within approved roots. Refuses overwrites. High risk —
+        the policy engine requires approval before this runs."""
+        import shutil
+
+        source = _guard(policy, args.get("source", ""), write=True)
+        dest = _guard(policy, args.get("dest", ""), write=True)
+        if not source.exists():
+            raise ToolError(f"source not found: {source}")
+        if dest.exists():
+            raise ToolError(f"destination already exists: {dest}")
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        shutil.move(str(source), str(dest))
+        return {"source": str(source), "dest": str(dest), "moved": True}
+
     return [
         ToolSpec(
             name="filesystem.list_dir",
@@ -126,6 +165,21 @@ def make_filesystem_tools(policy: PolicyEngine, max_read_bytes: int, max_hits: i
             input_schema={
                 "path": {"type": str, "required": True},
                 "query": {"type": str, "required": True},
+            },
+        ),
+        ToolSpec(
+            name="filesystem.catalog",
+            description="Inventory of top-level files and directories",
+            handler=catalog,
+            input_schema={"path": {"type": str, "required": True}},
+        ),
+        ToolSpec(
+            name="filesystem.move",
+            description="Move a file within approved write roots (no overwrite)",
+            handler=move,
+            input_schema={
+                "source": {"type": str, "required": True},
+                "dest": {"type": str, "required": True},
             },
         ),
     ]

@@ -71,8 +71,13 @@ class RuleBasedEngine(ReasoningEngine):
                         params["path"] = context["project_path"]
                     return Intent(name=name, confidence=0.9, params=params)
 
-        if any(w in text for w in ("open ", "launch ", "start ")) and "app" in text or text.startswith(("open ", "launch ")):
-            return Intent("desktop_launch", confidence=0.6, params={"target": text}, clarify=None)
+        if any(w in text for w in ("open ", "launch ", "start ")):
+            m = re.search(r"\b(?:open|launch|start)\s+(\S+)", text)
+            target = m.group(1) if m else ""
+            if target.startswith(("http://", "https://")):
+                return Intent("desktop_open_url", confidence=0.9, params={"url": target})
+            if target:
+                return Intent("desktop_launch", confidence=0.8, params={"app": target})
 
         return Intent(
             name="unknown",

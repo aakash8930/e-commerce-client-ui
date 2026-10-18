@@ -8,15 +8,16 @@ never depends on a remote API or a specific model.
 > Target machine: Intel i3 10th Gen, 8 GB RAM, MX Linux, 1 TB HDD.
 > Core runtime is **pure Python stdlib** (3.11+); pytest is the only dev dependency.
 
-## What works today (Milestone A + first verified workflow)
+## What works today (Milestones A–B + desktop layer & 3 workflows)
 
 - **Structured action format** — the planner never emits raw shell strings; it
   requests typed `Action`s from the orchestrator (`core/action.py`)
-- **Tool registry** — 9 tools with input schemas, risk levels and timeouts;
+- **Tool registry** — 17 tools with input schemas, risk levels and timeouts;
   failures return structured `ToolResult(ok=False)` instead of crashing
 - **Policy engine** — approved read/write roots (resolved paths, symlink
-  escapes denied), secret-file protection, command allowlist, risk classes
-  (low/moderate/high/critical) with approval gates
+  escapes denied), secret-file protection, command allowlist, desktop app
+  allowlist, URL scheme restrictions, risk classes (low/moderate/high/critical)
+  with approval gates
 - **Task state machine** — CREATED → PLANNED → WAITING_FOR_APPROVAL → RUNNING →
   VERIFYING → SUCCEEDED/FAILED/CANCELLED, checkpointed to SQLite
 - **Bounded recovery** — max 2 repair attempts, and only for retry-safe steps
@@ -24,11 +25,21 @@ never depends on a remote API or a specific model.
   decisions) with keyword retrieval, dedup by content hash, provenance
 - **Project intelligence** — project scans, symbol/reference search, structured
   pytest failure extraction
+- **Desktop control layer** — capability-detected at runtime (headless machines
+  get clear errors, never fake success): list/launch allowlisted apps, process
+  inspection via `/proc`, open approved files, open http(s) URLs only
 - **Workflow A: project diagnosis** — runs the tests, captures real failure
   evidence, locates the failing code, reads the implicated source, and writes
   an evidence-based report (never invented architecture)
+- **Workflow B: change verification** — git status + test run + regression
+  report; never commits or pushes
+- **Workflow C: file organization** — catalog → categorize → preview → single
+  consent → verified moves (no deletions, no overwrites)
+- **Workflow D: maintenance report** — disk/memory snapshot + stale-file
+  candidates (identified only, never auto-deleted)
 - **Observability** — `logs/jarvis.log` + `logs/audit.jsonl` audit trail
-- **CLI** — doctor, status, projects, index, tasks, task, memory, tools, run, demo
+- **CLI** — doctor, status, projects, index, tasks, task, memory, tools, apps,
+  run, demo
 
 ## Quick start (MX Linux / any Linux)
 
@@ -57,8 +68,18 @@ python3 main.py index <path>            register + scan a project
 python3 main.py tasks / task <id>       task history
 python3 main.py memory "<query>"        search memory
 python3 main.py tools                   registered tools & commands
+python3 main.py apps                    installed apps, launch allowlist
 python3 main.py run "<request>"         interpret + plan + execute
 python3 main.py demo                    Workflow A on demo_project
+```
+
+Example requests:
+
+```
+python3 main.py --yes run "diagnose failing tests in demo_project"
+python3 main.py --yes run "organize files in ~/Downloads"
+python3 main.py run "open firefox"
+python3 main.py --yes run "maintenance report"
 ```
 
 `--yes` auto-approves risky actions; without it you get an approval prompt.
@@ -105,10 +126,11 @@ executes a registered tool, and the verifier checks the actual outcome.
 .venv/bin/python -m pytest
 ```
 
-38 tests: policy escape attempts (traversal, symlinks, secrets), tool failure
-handling & timeouts, memory persistence across restart, planner validation,
-orchestrator state machine & bounded repair, and an end-to-end diagnosis of the
-demo project's known bug.
+52 tests: policy escape attempts (traversal, symlinks, secrets, app allowlist,
+URL schemes), tool failure handling & timeouts, headless-safe desktop tools,
+memory persistence across restart, planner validation, orchestrator state
+machine & bounded repair, end-to-end diagnosis of the demo project's known
+bug, and Workflow C preview/apply/verify.
 
 ## Roadmap status
 
@@ -121,8 +143,8 @@ demo project's known bug.
 | 4 — project intelligence | ✅ baseline (scan, symbols, failure extraction) |
 | 5 — task planner | ✅ baseline (deterministic templates + validation) |
 | 6 — intelligence layer | ✅ interface + rule-based engine (model plug-in point) |
-| 7 — desktop control | ⬜ next |
-| 8 — automation workflows | ✅ A/B/D; C (file organization) pending |
+| 7 — desktop control | ✅ baseline (allowlisted apps, processes, files, URLs) |
+| 8 — automation workflows | ✅ A/B/C/D |
 | 9 — verification & self-repair | ✅ bounded repair (max 2) |
 | 10 — interface | ✅ CLI; desktop/web UI later |
 | 11 — reliability & offline | ⬜ offline works; perf report pending |

@@ -97,3 +97,35 @@ def test_high_risk_requires_approval(policy: PolicyEngine, tmp_path: Path):
     assert decision.allowed
     assert decision.risk == RiskLevel.MODERATE
     assert not decision.requires_approval
+
+
+def test_move_is_high_risk_and_needs_both_paths(policy: PolicyEngine, tmp_path: Path):
+    safe = tmp_path / "safe"
+    decision = policy.check_action(
+        Action(
+            tool="filesystem.move",
+            arguments={"source": str(safe / "sub" / "a.txt"), "dest": str(safe / "sub" / "b.txt")},
+        )
+    )
+    assert decision.allowed
+    assert decision.risk == RiskLevel.HIGH
+    assert decision.requires_approval
+
+
+def test_move_outside_write_roots_denied(policy: PolicyEngine, tmp_path: Path):
+    safe = tmp_path / "safe"
+    decision = policy.check_action(
+        Action(
+            tool="filesystem.move",
+            arguments={"source": str(safe / "notes.txt"), "dest": str(safe / "sub" / "notes.txt")},
+        )
+    )
+    # notes.txt is outside write_roots (safe/sub) → refused
+    assert not decision.allowed
+
+
+def test_catalog_is_low_risk(policy: PolicyEngine, tmp_path: Path):
+    safe = tmp_path / "safe"
+    decision = policy.check_action(Action(tool="filesystem.catalog", arguments={"path": str(safe)}))
+    assert decision.allowed
+    assert decision.risk == RiskLevel.LOW

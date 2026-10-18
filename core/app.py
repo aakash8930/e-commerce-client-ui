@@ -17,6 +17,7 @@ from core.request_manager import RequestManager
 from memory.database import MemoryDB
 from memory.logger import Logger
 from models.reasoning_interface import RuleBasedEngine
+from tools.applications import make_desktop_tools
 from tools.filesystem import make_filesystem_tools
 from tools.project_tools import make_project_tools
 from tools.registry import ToolRegistry
@@ -60,6 +61,8 @@ class JarvisApp:
             command_timeout_s=int(limits.get("command_timeout_s", 120)),
             max_files=int(limits.get("max_index_files", 5000)),
         ):
+            self.registry.register(spec)
+        for spec in make_desktop_tools(self.policy):
             self.registry.register(spec)
         # policy learns the tool inventory: unknown tools are denied,
         # custom tools inherit their declared risk
@@ -107,6 +110,19 @@ class JarvisApp:
         )
         cmds = list(self.permissions.get("commands", {}))
         checks.append(("registered commands", len(cmds) > 0, ", ".join(cmds)))
+
+        from tools.applications import desktop_available
+
+        checks.append(
+            (
+                "desktop capability",
+                True,  # informational — headless is a valid mode
+                "available" if desktop_available()
+                else "not detected (desktop tools will report this clearly)",
+            )
+        )
+        apps = self.permissions.get("desktop", {}).get("approved_apps", [])
+        checks.append(("approved apps", True, ", ".join(apps) or "(none)"))
 
         ok = all(c[1] for c in checks)
         return {"ok": ok, "checks": [{"name": n, "passed": p, "detail": d} for n, p, d in checks]}

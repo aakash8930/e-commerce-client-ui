@@ -39,6 +39,20 @@ blocked_names = [
 ]
 blocked_dirs = [".ssh", ".aws", ".gnupg"]
 
+[desktop]
+# Only these applications may be launched (technical allowlist, not just prompts).
+approved_apps = [
+  "firefox",
+  "thunar",
+  "mousepad",
+  "xfce4-terminal",
+  "code",
+  "vlc",
+  "evince",
+]
+# URLs may only be opened with these schemes.
+allowed_url_schemes = ["https", "http"]
+
 # --- Registered terminal commands -------------------------------------------
 # The orchestrator never runs an arbitrary shell string. A tool call names one
 # of these commands; argv is built from the fixed prefix plus validated args.

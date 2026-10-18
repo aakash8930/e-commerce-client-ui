@@ -79,3 +79,92 @@ def test_file_tools_never_escape_demo(tmp_path: Path):
     )
     assert not result.ok
     assert refusal is not None
+
+
+# ---------------------------------------------------------------- Workflow C
+
+
+@pytest.fixture()
+def organize_target(tmp_path: Path) -> Path:
+    target = tmp_path / "messy"
+    (target / "Documents").mkdir(parents=True)
+    (target / "notes.md").write_text("# notes", encoding="utf-8")
+    (target / "report.pdf").write_bytes(b"%PDF")
+    (target / "photo.png").write_bytes(b"\x89PNG")
+    (target / "backup.zip").write_bytes(b"PK")
+    (target / "script.py").write_text("print('hi')", encoding="utf-8")
+    (target / "mystery.xyz").write_bytes(b"??")
+    return target
+
+
+def _organize_app(tmp_path: Path) -> JarvisApp:
+    return JarvisApp(
+        project_root=str(ROOT),
+        approver=lambda a, r: True,
+        memory_db=str(tmp_path / "m.db"),
+        reports_dir=str(tmp_path / "reports"),
+    )
+
+
+def test_organize_preview_only_moves_nothing(tmp_path: Path, organize_target: Path):
+    from automation.file_organization import organize_files
+
+    app = _organize_app(tmp_path)
+    app.policy.approved_roots.append(organize_target.resolve())
+    app.policy.write_roots.append(organize_target.resolve())
+
+    report = organize_files(
+        app.orchestrator,
+        target_dir=str(organize_target),
+        reports_dir=str(tmp_path / "reports"),
+        approve=lambda plan: False,  # user declines
+    )
+    assert report["applied"] is False
+    assert len(report["planned_moves"]) == 6
+    assert (organize_target / "notes.md").exists()  # nothing moved
+    assert report["note"].lower().startswith("no files were deleted")
+
+
+def test_organize_applies_and_verifies(tmp_path: Path, organize_target: Path):
+    from automation.file_organization import organize_files
+
+    app = _organize_app(tmp_path)
+    app.policy.approved_roots.append(organize_target.resolve())
+    app.policy.write_roots.append(organize_target.resolve())
+
+    report = organize_files(
+        app.orchestrator,
+        target_dir=str(organize_target),
+        reports_dir=str(tmp_path / "reports"),
+        approve=lambda plan: True,
+    )
+    assert report["applied"] is True
+    assert report["verified"] == 6
+    assert (organize_target / "Documents" / "report.pdf").exists()
+    assert (organize_target / "Images" / "photo.png").exists()
+    assert (organize_target / "Archives" / "backup.zip").exists()
+    assert (organize_target / "Code" / "script.py").exists()
+    assert (organize_target / "Other" / "mystery.xyz").exists()
+    assert not (organize_target / "notes.md").exists()
+    # pre-existing Documents dir untouched apart from receiving the pdf
+    assert (organize_target / "Documents").is_dir()
+
+
+def test_organize_move_escape_is_blocked(tmp_path: Path, organize_target: Path):
+    """filesystem.move must refuse destinations outside write roots."""
+    from automation.file_organization import organize_files
+
+    app = _organize_app(tmp_path)
+    # read is allowed, but write_roots deliberately NOT extended →
+    # every move must fail safely
+    app.policy.approved_roots.append(organize_target.resolve())
+
+    report = organize_files(
+        app.orchestrator,
+        target_dir=str(organize_target),
+        reports_dir=str(tmp_path / "reports"),
+        approve=lambda plan: True,
+    )
+    assert report["verified"] == 0
+    assert report["moves_failed"], "every move should be refused"
+    assert (organize_target / "notes.md").exists()
