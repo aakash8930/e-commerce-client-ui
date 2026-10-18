@@ -1,18 +1,19 @@
-import ImageSlider from "@/components/ImageSlider";
-import ProductList from "@/components/ProductList";
+import Hero from "@/components/landing/Hero";
+import LandingFooter from "@/components/landing/LandingFooter";
+import LandingNav from "@/components/landing/LandingNav";
+import LandingSections from "@/components/landing/LandingSections";
 
-const Homepage = async ({
-  searchParams,
-}: {
-  searchParams: Promise<{ category: string }>;
-}) => {
-  const category = (await searchParams).category;
+const LandingPage = () => {
   return (
-    <div>
-      <ImageSlider />
-      <ProductList category={category} params="homepage" />
+    <div className="flex min-h-screen flex-col">
+      <LandingNav />
+      <main className="flex-1">
+        <Hero />
+        <LandingSections />
+      </main>
+      <LandingFooter />
     </div>
   );
 };
 
-export default Homepage;
+export default LandingPage;

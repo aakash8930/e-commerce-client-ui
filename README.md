@@ -1,41 +1,55 @@
-# Trendstore — E-commerce Client UI
+# Slotly — Appointment Booking SaaS
 
-A small e-commerce storefront built with Next.js 15 (App Router), React 19, Tailwind CSS v4, Zustand, and react-hook-form + Zod.
+Slotly is a Calendly-style appointment booking product for service businesses
+(coaches, tutors, salons, consultants). It ships as a complete MVP:
+
+- **Marketing site** with hero, features, how-it-works and pricing
+- **Public booking page** at `/book/<handle>` — pick service → date → time → done
+- **Dashboard** at `/dashboard` — overview stats, bookings, services, weekly
+  availability, reminders and a client directory
+
+Built with Next.js 15 (App Router), React 19, Tailwind CSS v4, Zustand,
+and react-hook-form + Zod.
+
+> Demo build: all data is stored in the browser (localStorage) — no backend
+> required. Swap `src/lib/store.ts` for API calls to make it real.
 
 ## Getting Started
 
-Install dependencies with [pnpm](https://pnpm.io) (this repo uses `pnpm-lock.yaml`):
+Install dependencies with [pnpm](https://pnpm.io):
 
 ```bash
 pnpm install
-```
-
-Run the development server:
-
-```bash
 pnpm dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000).
+
+- Marketing site: `/`
+- Live demo booking page: `/book/slotly-demo`
+- Dashboard: `/dashboard`
 
 ## Scripts
 
 ```bash
-pnpm dev    # start the dev server (turbopack)
+pnpm dev    # dev server (turbopack)
 pnpm build  # production build
 pnpm start  # serve the production build
-pnpm lint   # run ESLint
+pnpm lint   # ESLint
 ```
 
-## Notes
+## Structure
 
-- Product data is currently hard-coded mock data in `src/components/ProductList.tsx`.
-- The cart is persisted in the browser via Zustand (`src/stores/cartStore.ts`).
-- Checkout is a UI-only flow — the payment step does not process real payments.
-
-## Learn More
-
-- [Next.js Documentation](https://nextjs.org/docs) — features and API of Next.js
-- [Learn Next.js](https://nextjs.org/learn) — interactive Next.js tutorial
-- [Tailwind CSS v4](https://tailwindcss.com/docs) — styling
-- [Zustand](https://zustand.docs.pmnd.rs/) — state management
+```
+src/
+  app/                # routes (landing, /book/[handle], /dashboard/*)
+  components/
+    landing/          # marketing sections
+    booking/          # public booking wizard
+    dashboard/        # app shell + management views
+  lib/
+    store.ts          # Zustand store (persisted to localStorage)
+    slots.ts          # date/time + slot generation logic
+    seed.ts           # demo profile, services, availability, bookings
+    types.ts          # domain types + zod form schemas
+```

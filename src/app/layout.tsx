@@ -1,13 +1,12 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import Navbar from "@/components/Navbar";
-import Footer from "@/components/Footer";
+import StoreHydrator from "@/components/StoreHydrator";
 import { ToastContainer } from "react-toastify";
 
 export const metadata: Metadata = {
-  title: "Trendstore - Best Clothes",
+  title: "Slotly — Get booked without the back-and-forth",
   description:
-    "Trendstore is the best place to find the best clothes and clothing accessories",
+    "Slotly gives service businesses a booking page, smart availability, and automated reminders. Share your link and let clients book you 24/7.",
 };
 
 export default function RootLayout({
@@ -17,12 +16,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className="antialiased">
-        <div className="mx-auto p-4 sm:px-0 sm:max-w-xl md:max-w-2xl lg:max-w-3xl xl:max-w-6xl">
-          <Navbar />
-          {children}
-          <Footer />
-        </div>
+      <body className="min-h-screen bg-white text-slate-900 antialiased">
+        <StoreHydrator />
+        {children}
         <ToastContainer position="bottom-right" />
       </body>
     </html>
