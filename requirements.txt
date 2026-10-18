@@ -1,0 +1,2 @@
+# dev/test dependencies — runtime is stdlib-only
+pytest>=7.0

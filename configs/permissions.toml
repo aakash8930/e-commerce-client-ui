@@ -1,0 +1,80 @@
+# Permission policy for jarvis-os.
+# Safety is enforced technically (resolved paths, allowlisted commands),
+# not merely by asking the user.
+
+[filesystem]
+# Directories the assistant may read. "~" is expanded. Relative paths
+# resolve against the project root.
+approved_roots = [
+  ".",
+  "~/Projects",
+  "~/projects",
+  "~/Documents",
+  "~/jarvis-os",
+]
+
+# Directories the assistant may create/modify files in (subset of approved).
+write_roots = [
+  "data",
+  "logs",
+  "demo_project",
+]
+
+[secrets]
+# File/directory names that are blocked from reads by default (critical risk).
+blocked_names = [
+  ".env",
+  ".env.*",
+  "id_rsa",
+  "id_rsa.*",
+  "id_ed25519",
+  "id_ed25519.*",
+  "*.pem",
+  "*.key",
+  "credentials.json",
+  "secrets.toml",
+  ".netrc",
+  ".npmrc",
+  ".pypirc",
+]
+blocked_dirs = [".ssh", ".aws", ".gnupg"]
+
+# --- Registered terminal commands -------------------------------------------
+# The orchestrator never runs an arbitrary shell string. A tool call names one
+# of these commands; argv is built from the fixed prefix plus validated args.
+
+[commands.pytest]
+argv = ["python3", "-m", "pytest"]
+risk = "moderate"
+timeout_s = 120
+description = "Run the pytest test suite"
+
+[commands.python]
+argv = ["python3"]
+risk = "high"
+timeout_s = 120
+description = "Run a Python interpreter or script"
+
+[commands.git]
+argv = ["git"]
+risk = "moderate"
+timeout_s = 30
+description = "Git operations (read status, diff, log)"
+
+[commands.free]
+argv = ["free", "-h"]
+risk = "low"
+timeout_s = 5
+description = "Memory usage"
+
+[commands.df]
+argv = ["df", "-h"]
+risk = "low"
+timeout_s = 5
+description = "Disk usage"
+
+[commands.uname]
+argv = ["uname", "-a"]
+risk = "low"
+timeout_s = 5
+description = "Kernel / system identifier"

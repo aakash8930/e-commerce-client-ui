@@ -1,0 +1,28 @@
+[app]
+name = "jarvis-os"
+version = "0.2.0"
+description = "Local AI operating environment — model-independent agent runtime"
+
+[paths]
+data_dir = "data"
+log_dir = "logs"
+reports_dir = "data/reports"
+memory_db = "data/jarvis_memory.db"
+
+[limits]
+# default timeout for a single tool invocation (seconds)
+tool_timeout_s = 30
+# timeout for long-running commands such as test suites
+command_timeout_s = 120
+# maximum repair attempts per step (bounded recovery)
+max_repair_attempts = 2
+# never read more than this from a single file
+max_file_read_bytes = 200000
+# search limits
+max_search_hits = 50
+max_index_files = 5000
+
+[memory]
+# temporary observations expire after N days (0 = never)
+working_memory_days = 30
+search_result_limit = 8
