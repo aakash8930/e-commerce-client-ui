@@ -37,9 +37,18 @@ never depends on a remote API or a specific model.
   consent → verified moves (no deletions, no overwrites)
 - **Workflow D: maintenance report** — disk/memory snapshot + stale-file
   candidates (identified only, never auto-deleted)
+- **Reliability & failure injection** — controlled behavior for missing files,
+  inaccessible directories, corrupted config (clear `ConfigError`), command
+  timeouts, locked databases (state writes fail clearly, logging never
+  raises), interrupted tasks (auto-recovered at startup), invalid tool
+  responses — proven by tests
+- **Offline guarantee** — the full workflow runs with network sockets disabled;
+  nothing ever needs a remote service
+- **Performance baseline** — `perf` command produces a reproducible report
+  (startup, scan, search, memory retrieval, peak RSS) for the 8 GB/HDD target
 - **Observability** — `logs/jarvis.log` + `logs/audit.jsonl` audit trail
 - **CLI** — doctor, status, projects, index, tasks, task, memory, tools, apps,
-  run, demo
+  perf, run, demo
 
 ## Quick start (MX Linux / any Linux)
 
@@ -69,6 +78,7 @@ python3 main.py tasks / task <id>       task history
 python3 main.py memory "<query>"        search memory
 python3 main.py tools                   registered tools & commands
 python3 main.py apps                    installed apps, launch allowlist
+python3 main.py perf [path]             reproducible performance baseline
 python3 main.py run "<request>"         interpret + plan + execute
 python3 main.py demo                    Workflow A on demo_project
 ```
@@ -126,11 +136,13 @@ executes a registered tool, and the verifier checks the actual outcome.
 .venv/bin/python -m pytest
 ```
 
-52 tests: policy escape attempts (traversal, symlinks, secrets, app allowlist,
+63 tests: policy escape attempts (traversal, symlinks, secrets, app allowlist,
 URL schemes), tool failure handling & timeouts, headless-safe desktop tools,
 memory persistence across restart, planner validation, orchestrator state
 machine & bounded repair, end-to-end diagnosis of the demo project's known
-bug, and Workflow C preview/apply/verify.
+bug, Workflow C preview/apply/verify, and the Phase 11 failure battery
+(corrupted config, locked DB, interrupted tasks, invalid tool responses,
+full offline operation).
 
 ## Roadmap status
 
@@ -147,7 +159,7 @@ bug, and Workflow C preview/apply/verify.
 | 8 — automation workflows | ✅ A/B/C/D |
 | 9 — verification & self-repair | ✅ bounded repair (max 2) |
 | 10 — interface | ✅ CLI; desktop/web UI later |
-| 11 — reliability & offline | ⬜ offline works; perf report pending |
+| 11 — reliability & offline | ✅ failure battery, crash recovery, perf baseline, offline-tested |
 | 12 — alpha release | ⬜ |
 
 ## Data & privacy

@@ -85,7 +85,18 @@ class ToolRegistry:
 
         try:
             data = spec.handler(dict(action.arguments))
-            return ToolResult(ok=True, data=data or {}, duration_ms=timed_ms(start))
+            if data is None:
+                data = {}
+            if not isinstance(data, dict):
+                return ToolResult(
+                    ok=False,
+                    error=(
+                        f"invalid tool response from {action.tool}: "
+                        f"expected dict, got {type(data).__name__}"
+                    ),
+                    duration_ms=timed_ms(start),
+                )
+            return ToolResult(ok=True, data=data, duration_ms=timed_ms(start))
         except ToolError as exc:
             return ToolResult(ok=False, error=str(exc), duration_ms=timed_ms(start))
         except Exception as exc:  # controlled error, never crash the assistant

@@ -66,14 +66,23 @@ CREATE INDEX IF NOT EXISTS idx_tool_runs_task ON tool_runs(task_id);
 """
 
 
+class MemoryDBError(Exception):
+    """A core state write failed (e.g. the database is locked)."""
+
+
 class MemoryDB:
     def __init__(self, db_path: str | Path) -> None:
         path = Path(db_path)
         path.parent.mkdir(parents=True, exist_ok=True)
-        self.conn = sqlite3.connect(str(path))
+        self.conn = sqlite3.connect(str(path), timeout=5.0)
         self.conn.row_factory = sqlite3.Row
         self.conn.execute("PRAGMA journal_mode=WAL")
+        self.conn.execute("PRAGMA busy_timeout=5000")
         self.conn.executescript(SCHEMA)
+        # lightweight migration for DBs created before the error column existed
+        cols = [r[1] for r in self.conn.execute("PRAGMA table_info(tasks)")]
+        if "error" not in cols:
+            self.conn.execute("ALTER TABLE tasks ADD COLUMN error TEXT")
         self.conn.commit()
 
     def close(self) -> None:
@@ -107,27 +116,36 @@ class MemoryDB:
     # ---------------------------------------------------------------- tasks
 
     def create_task(self, task_id: str, goal: str) -> None:
-        self.conn.execute(
-            "INSERT OR REPLACE INTO tasks (id, goal, status, created_at) VALUES (?, ?, ?, datetime('now'))",
-            (task_id, goal, "created"),
-        )
-        self.conn.commit()
+        try:
+            self.conn.execute(
+                "INSERT OR REPLACE INTO tasks (id, goal, status, created_at) VALUES (?, ?, ?, datetime('now'))",
+                (task_id, goal, "created"),
+            )
+            self.conn.commit()
+        except sqlite3.Error as exc:
+            raise MemoryDBError(f"cannot record task {task_id}: {exc}") from exc
 
     def set_task_state(self, task_id: str, status: str, error: str | None = None) -> None:
         completed = "datetime('now')" if status in {"succeeded", "failed", "cancelled"} else "NULL"
-        self.conn.execute(
-            f"UPDATE tasks SET status = ?, completed_at = {completed} WHERE id = ?",
-            (status, task_id),
-        )
-        self.conn.commit()
+        try:
+            self.conn.execute(
+                f"UPDATE tasks SET status = ?, error = ?, completed_at = {completed} WHERE id = ?",
+                (status, error, task_id),
+            )
+            self.conn.commit()
+        except sqlite3.Error as exc:
+            raise MemoryDBError(f"cannot update task {task_id}: {exc}") from exc
 
     def log_step(self, task_id: str, sequence: int, objective: str, action: dict, status: str, detail: str = "") -> None:
-        self.conn.execute(
-            "INSERT INTO task_steps (task_id, sequence, objective, action, status, detail) "
-            "VALUES (?, ?, ?, ?, ?, ?)",
-            (task_id, sequence, objective, json.dumps(action), status, detail),
-        )
-        self.conn.commit()
+        try:
+            self.conn.execute(
+                "INSERT INTO task_steps (task_id, sequence, objective, action, status, detail) "
+                "VALUES (?, ?, ?, ?, ?, ?)",
+                (task_id, sequence, objective, json.dumps(action), status, detail),
+            )
+            self.conn.commit()
+        except sqlite3.Error as exc:
+            raise MemoryDBError(f"cannot record step for task {task_id}: {exc}") from exc
 
     def get_task(self, task_id: str) -> dict[str, Any] | None:
         row = self.conn.execute("SELECT * FROM tasks WHERE id = ?", (task_id,)).fetchone()
@@ -155,37 +173,49 @@ class MemoryDB:
         project_id: int | None = None,
         provenance: str | None = None,
     ) -> int | None:
-        """Store a memory fact. Deduplicates on content hash."""
+        """Store a memory fact. Deduplicates on content hash.
+
+        Never raises: observation logging must not take down a running task.
+        """
         import hashlib
 
-        h = hashlib.sha256(content.encode("utf-8")).hexdigest()
-        existing = self.conn.execute(
-            "SELECT id FROM observations WHERE content_hash = ?", (h,)
-        ).fetchone()
-        if existing:
-            return None  # duplicate — do not store twice
-        cur = self.conn.execute(
-            "INSERT INTO observations (project_id, category, content, content_hash, provenance) "
-            "VALUES (?, ?, ?, ?, ?)",
-            (project_id, category, content, h, provenance),
-        )
-        self.conn.commit()
-        return int(cur.lastrowid)
+        try:
+            h = hashlib.sha256(content.encode("utf-8")).hexdigest()
+            existing = self.conn.execute(
+                "SELECT id FROM observations WHERE content_hash = ?", (h,)
+            ).fetchone()
+            if existing:
+                return None  # duplicate — do not store twice
+            cur = self.conn.execute(
+                "INSERT INTO observations (project_id, category, content, content_hash, provenance) "
+                "VALUES (?, ?, ?, ?, ?)",
+                (project_id, category, content, h, provenance),
+            )
+            self.conn.commit()
+            return int(cur.lastrowid)
+        except sqlite3.Error:
+            return None
 
     def add_decision(self, decision: str, rationale: str = "", project_id: int | None = None) -> None:
-        self.conn.execute(
-            "INSERT INTO decisions (project_id, decision, rationale) VALUES (?, ?, ?)",
-            (project_id, decision, rationale),
-        )
-        self.conn.commit()
+        try:
+            self.conn.execute(
+                "INSERT INTO decisions (project_id, decision, rationale) VALUES (?, ?, ?)",
+                (project_id, decision, rationale),
+            )
+            self.conn.commit()
+        except sqlite3.Error:
+            pass
 
     def log_tool_run(self, task_id: str | None, tool_name: str, status: str, duration_ms: int, detail: str = "") -> None:
-        self.conn.execute(
-            "INSERT INTO tool_runs (task_id, tool_name, status, duration_ms, detail) "
-            "VALUES (?, ?, ?, ?, ?)",
-            (task_id, tool_name, status, duration_ms, detail),
-        )
-        self.conn.commit()
+        try:
+            self.conn.execute(
+                "INSERT INTO tool_runs (task_id, tool_name, status, duration_ms, detail) "
+                "VALUES (?, ?, ?, ?, ?)",
+                (task_id, tool_name, status, duration_ms, detail),
+            )
+            self.conn.commit()
+        except sqlite3.Error:
+            pass  # audit logging must never crash execution
 
     def search(self, query: str, limit: int = 8) -> list[dict[str, Any]]:
         """Keyword search across observations and decisions, ranked by

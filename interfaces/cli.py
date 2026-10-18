@@ -271,6 +271,27 @@ def cmd_apps(app: JarvisApp, _args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_perf(app: JarvisApp, args: argparse.Namespace) -> int:
+    from core.performance import run_benchmark
+
+    report = run_benchmark(
+        app,
+        project_root=ROOT,
+        target_path=getattr(args, "path", None),
+    )
+    _print("jarvis-os performance baseline")
+    _print("=" * 50)
+    _print(f"  cold startup           {report['startup_ms']} ms")
+    _print(f"  project scan           {report['scan_ms']} ms ({report['scan_files']} files)")
+    _print(f"  filesystem search      {report['fs_search_ms']} ms ({report['fs_search_hits']} hits)")
+    _print(f"  memory retrieval       {report['memory_search_ms']} ms")
+    _print(f"  system info            {report['system_info_ms']} ms")
+    _print(f"  RSS current / peak     {report['rss_current_mib']} / {report['rss_peak_mib']} MiB")
+    _print("=" * 50)
+    _print(f"report: {report['report_path']}")
+    return 0
+
+
 def cmd_demo(app: JarvisApp, args: argparse.Namespace) -> int:
     from automation.project_diagnosis import diagnose
 
@@ -316,6 +337,9 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("run")
     p.add_argument("request")
 
+    p = sub.add_parser("perf")
+    p.add_argument("path", nargs="?", default=None, help="target project (default: demo_project)")
+
     sub.add_parser("demo")
     return parser
 
@@ -330,6 +354,7 @@ COMMANDS = {
     "memory": cmd_memory,
     "tools": cmd_tools,
     "apps": cmd_apps,
+    "perf": cmd_perf,
     "run": cmd_run,
     "demo": cmd_demo,
 }
@@ -338,6 +363,21 @@ COMMANDS = {
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     approver = _approver_auto if args.yes else _approver_prompt
-    app = JarvisApp(project_root=ROOT, approver=approver)
+
+    from core.config import ConfigError
+
+    try:
+        app = JarvisApp(project_root=ROOT, approver=approver)
+    except ConfigError as exc:
+        print(f"configuration error: {exc}")
+        print("fix the file above (TOML syntax) and run again.")
+        return 2
+
+    # crash recovery: never leave a task stuck 'running'
+    recovered = app.requests.recover_interrupted()
+    if recovered:
+        app.logger.audit("startup_recovery", recovered=recovered)
+        print(f"recovered {len(recovered)} interrupted task(s): {', '.join(recovered)}")
+
     handler = COMMANDS[args.command]
     return handler(app, args)
